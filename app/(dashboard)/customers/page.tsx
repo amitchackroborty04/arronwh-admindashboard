@@ -23,6 +23,12 @@ import {
 import { CustomPagination } from '@/components/ui/common/CustomPagination';
 
 const PAGE_SIZE = 10;
+const CUSTOMER_TAG_OPTIONS = [
+  'Boiler Customer',
+  'Bathroom Lead',
+  'Heat Pump Quote',
+  'Annual Service Reminder',
+] as const;
 
 type CustomerItem = {
   _id: string;
@@ -39,6 +45,8 @@ type CustomerItem = {
   country?: string;
   city?: string;
   address?: string;
+  tag?: string;
+  customerTag?: string;
   status?: string;
   verifiedForget?: boolean;
   stripeAccountId?: string;
@@ -66,6 +74,7 @@ type CreateCustomerPayload = {
   country: string;
   city: string;
   address: string;
+  tag: string;
   verifiedForget: string;
   status: string;
   stripeAccountId: string;
@@ -74,7 +83,9 @@ type CreateCustomerPayload = {
 type CustomerFormProps = {
   onBack: () => void;
   onSubmit: (payload: CreateCustomerPayload) => Promise<void>;
+  onCsvUpload: (file: File) => Promise<boolean>;
   isSubmitting: boolean;
+  isCsvUploading: boolean;
 };
 
 const getApiBase = () => (process.env.NEXT_PUBLIC_API_BASE_URL ?? '').replace(/\/+$/, '');
@@ -309,7 +320,13 @@ const formatDate = (value?: string) => {
   }).format(date);
 };
 
-const CustomerCreateForm = ({ onBack, onSubmit, isSubmitting }: CustomerFormProps) => {
+const CustomerCreateForm = ({
+  onBack,
+  onSubmit,
+  onCsvUpload,
+  isSubmitting,
+  isCsvUploading,
+}: CustomerFormProps) => {
   const [formData, setFormData] = useState<CreateCustomerPayload>({
     fullName: '',
     email: '',
@@ -321,6 +338,7 @@ const CustomerCreateForm = ({ onBack, onSubmit, isSubmitting }: CustomerFormProp
     country: '',
     city: '',
     address: '',
+    tag: '',
     verifiedForget: '',
     status: '',
     stripeAccountId: '',
@@ -331,6 +349,8 @@ const CustomerCreateForm = ({ onBack, onSubmit, isSubmitting }: CustomerFormProp
   const [isAddressDropdownOpen, setIsAddressDropdownOpen] = useState(false);
   const [postcodeMessage, setPostcodeMessage] = useState('');
   const [postcodeError, setPostcodeError] = useState('');
+  const [isCsvDialogOpen, setIsCsvDialogOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
 
   useEffect(() => {
     const normalizedPostcode = normalizePostcode(postcode);
@@ -424,8 +444,38 @@ const CustomerCreateForm = ({ onBack, onSubmit, isSubmitting }: CustomerFormProp
     setPostcodeError('');
   };
 
+  const handleCsvDialogChange = (nextOpen: boolean) => {
+    setIsCsvDialogOpen(nextOpen);
+    if (!nextOpen) {
+      setCsvFile(null);
+    }
+  };
+
+  const handleCsvFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setCsvFile(file);
+  };
+
+  const handleCsvUpload = async () => {
+    if (!csvFile) {
+      toast.error('Please select a CSV file.');
+      return;
+    }
+
+    const uploaded = await onCsvUpload(csvFile);
+    if (uploaded) {
+      handleCsvDialogChange(false);
+    }
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    const normalizedTag = formData.tag.trim();
+
+    if (!normalizedTag) {
+      toast.error('Please select a customer tag before continuing.');
+      return;
+    }
 
     await onSubmit({
       ...formData,
@@ -439,6 +489,7 @@ const CustomerCreateForm = ({ onBack, onSubmit, isSubmitting }: CustomerFormProp
       country: formData.country.trim(),
       city: formData.city.trim(),
       address: formData.address.trim(),
+      tag: normalizedTag,
       verifiedForget: formData.verifiedForget,
       status: formData.status.trim(),
       stripeAccountId: formData.stripeAccountId.trim(),
@@ -446,16 +497,27 @@ const CustomerCreateForm = ({ onBack, onSubmit, isSubmitting }: CustomerFormProp
   };
 
   return (
-    <div className="rounded-[12px] border border-[#E5E7EB] bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.04)] sm:p-5">
+    <>
+      <div className="rounded-[12px] border border-[#E5E7EB] bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.04)] sm:p-5">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-[20px] font-semibold text-[#2D3D4D]">Add Customer</h2>
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-[8px] border border-[#D5DCE3] px-4 py-2 text-sm font-medium text-[#2D3D4D] hover:bg-[#F7FAFC]"
-        >
-          Back To List
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleCsvDialogChange(true)}
+            disabled={isCsvUploading}
+            className="rounded-[8px] border border-[#D5DCE3] px-4 py-2 text-sm font-medium text-[#2D3D4D] hover:bg-[#F7FAFC] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {isCsvUploading ? 'Uploading CSV...' : 'Add CSV File'}
+          </button>
+          <button
+            type="button"
+            onClick={onBack}
+            className="rounded-[8px] border border-[#D5DCE3] px-4 py-2 text-sm font-medium text-[#2D3D4D] hover:bg-[#F7FAFC]"
+          >
+            Back To List
+          </button>
+        </div>
       </div>
 
       <form
@@ -510,7 +572,24 @@ const CustomerCreateForm = ({ onBack, onSubmit, isSubmitting }: CustomerFormProp
             />
           </div>
 
-         
+          <div className="col-span-12 md:col-span-6 space-y-1">
+            <label className="block text-base md:text-[17px] font-medium text-[#2D3D4D]">
+              Customer Tag
+            </label>
+            <select
+              name="tag"
+              value={formData.tag}
+              onChange={handleInputChange}
+              className="h-12 w-full rounded-none border-b border-[#2D3D4D] bg-[#FFFFFF] px-4 text-base text-[#2D3D4D] focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="">Select customer tag</option>
+              {CUSTOMER_TAG_OPTIONS.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div className="col-span-12 md:col-span-6 space-y-1">
             <label className="block text-base md:text-[17px] font-medium text-[#2D3D4D]">
@@ -583,14 +662,65 @@ const CustomerCreateForm = ({ onBack, onSubmit, isSubmitting }: CustomerFormProp
         <div className="flex justify-end pt-2 md:pt-0">
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !formData.tag.trim()}
             className="h-12 w-full md:w-auto md:min-w-[180px] rounded-[8px] bg-[#FBFF26] px-8 text-base font-bold text-[#2D3D4D] transition-all hover:bg-[#FBFF26]/90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? 'Adding...' : 'Add Customer'}
           </button>
         </div>
       </form>
-    </div>
+      </div>
+
+      <Dialog open={isCsvDialogOpen} onOpenChange={handleCsvDialogChange}>
+        <DialogContent className="max-w-[500px] bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold text-[#2D3D4D]">
+              Upload Customer CSV
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <label
+              htmlFor="customer-csv-file"
+              className="block text-sm font-medium text-[#2D3D4D]"
+            >
+              csvFile
+            </label>
+            <input
+              id="customer-csv-file"
+              type="file"
+              accept=".csv,text/csv"
+              onChange={handleCsvFileChange}
+              className="block w-full cursor-pointer rounded-md border border-[#D5DCE3] bg-white px-3 py-2 text-sm text-[#2D3D4D] file:mr-3 file:rounded-[6px] file:border-0 file:bg-[#F0F4F8] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-[#2D3D4D] hover:file:bg-[#E6ECF2]"
+            />
+            {csvFile && (
+              <p className="text-xs text-[#5E6B78]">
+                Selected: <span className="font-medium text-[#2D3D4D]">{csvFile.name}</span>
+              </p>
+            )}
+          </div>
+
+          <div className="mt-2 flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => handleCsvDialogChange(false)}
+              disabled={isCsvUploading}
+              className="h-10 rounded-[8px] border border-[#D5DCE3] px-4 text-sm font-medium text-[#2D3D4D] hover:bg-[#F7FAFC] disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleCsvUpload()}
+              disabled={!csvFile || isCsvUploading}
+              className="h-10 rounded-[8px] bg-[#FBFF26] px-4 text-sm font-semibold text-[#2D3D4D] hover:bg-[#FBFF26]/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isCsvUploading ? 'Uploading...' : 'Upload'}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
@@ -604,6 +734,7 @@ export default function CustomersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
+  const [isCsvUploading, setIsCsvUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CustomerItem | null>(null);
@@ -696,6 +827,43 @@ export default function CustomersPage() {
     }
   };
 
+  const handleUploadCustomerCsv = async (file: File): Promise<boolean> => {
+    setIsCsvUploading(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('csvFile', file);
+
+      const response = await fetch(resolveUserCollectionEndpoint(), {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: formData,
+      });
+
+      const result = (await response.json().catch(() => null)) as ApiResponse | null;
+      const hasExplicitFailure = result?.success === false || result?.status === false;
+
+      if (!response.ok || hasExplicitFailure) {
+        throw new Error(result?.message || 'Failed to upload CSV file.');
+      }
+
+      toast.success(result?.message || 'CSV uploaded successfully.');
+      setIsCreateMode(false);
+      setPage(1);
+
+      return true;
+    } catch (uploadError) {
+      const message =
+        uploadError instanceof Error ? uploadError.message : 'Failed to upload CSV file.';
+      setError(message);
+      toast.error(message);
+      return false;
+    } finally {
+      setIsCsvUploading(false);
+    }
+  };
+
   const handleOpenDelete = (customer: CustomerItem) => {
     setDeleteTarget(customer);
     setIsDeleteOpen(true);
@@ -784,6 +952,8 @@ export default function CustomersPage() {
             onBack={() => setIsCreateMode(false)}
             onSubmit={handleCreateCustomer}
             isSubmitting={isSubmittingCreate}
+            onCsvUpload={handleUploadCustomerCsv}
+            isCsvUploading={isCsvUploading}
           />
         </div>
       </div>
@@ -834,11 +1004,7 @@ export default function CustomersPage() {
               </button>
             </div>
 
-            {!!error && (
-              <div className="mb-3 rounded-md border border-[#E6BAC0] bg-[#FFF4F5] px-4 py-3 text-sm text-[#C0392B]">
-                {error}
-              </div>
-            )}
+       
 
             <div className="overflow-x-auto">
               <Table className="min-w-[1100px]">
@@ -855,6 +1021,9 @@ export default function CustomersPage() {
                     </TableHead>
                     <TableHead className="h-[42px] px-4 text-[16px] font-medium text-[#00A56F]">
                       Role
+                    </TableHead>
+                    <TableHead className="h-[42px] px-4 text-[16px] font-medium text-[#00A56F]">
+                      Customer Type
                     </TableHead>
                     <TableHead className="h-[42px] px-4 text-[16px] font-medium text-[#00A56F]">
                       Location
@@ -875,7 +1044,7 @@ export default function CustomersPage() {
                   {isLoading ? (
                     Array.from({ length: 6 }).map((_, index) => (
                       <TableRow key={`skeleton-${index}`} className="border-b border-[#EDF1F4]">
-                        {Array.from({ length: 8 }).map((__, cellIndex) => (
+                        {Array.from({ length: 9 }).map((__, cellIndex) => (
                           <TableCell key={`cell-${cellIndex}`} className="px-4 py-[14px]">
                             <div className="h-5 w-full animate-pulse rounded-md bg-gray-200" />
                           </TableCell>
@@ -884,7 +1053,7 @@ export default function CustomersPage() {
                     ))
                   ) : customers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-32 text-center text-[#64748B]">
+                      <TableCell colSpan={9} className="h-32 text-center text-[#64748B]">
                         No customers found
                       </TableCell>
                     </TableRow>
@@ -912,6 +1081,9 @@ export default function CustomersPage() {
                           </TableCell>
                           <TableCell className="px-4 py-[14px] text-[15px] font-medium text-[#2D3D4D]">
                             {customer.role || 'N/A'}
+                          </TableCell>
+                          <TableCell className="px-4 py-[14px] text-[15px] font-medium text-[#2D3D4D]">
+                            {customer.tag || customer.customerTag || 'N/A'}
                           </TableCell>
                           <TableCell className="px-4 py-[14px] text-[15px] font-medium text-[#2D3D4D]">
                             <p className="max-w-[200px] truncate" title={location || 'N/A'}>

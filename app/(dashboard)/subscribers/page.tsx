@@ -24,6 +24,13 @@ type ApiResponse = {
   message?: string;
 };
 
+const CUSTOMER_TYPE_OPTIONS = [
+  "Boiler Customer",
+  "Bathroom Lead",
+  "Heat Pump Quote",
+  "Annual Service Reminder",
+] as const;
+
 const hasExplicitFailure = (payload: ApiResponse | null) =>
   payload?.success === false || payload?.status === false;
 
@@ -44,6 +51,7 @@ export default function SubscriberMessageForm() {
 
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const [tag, setTag] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -51,6 +59,7 @@ export default function SubscriberMessageForm() {
     mutationFn: async () => {
       const trimmedSubject = subject.trim();
       const trimmedMessage = message.trim();
+      const trimmedTag = tag.trim();
 
       if (!trimmedSubject || !trimmedMessage) {
         throw new Error("Subject and message are required.");
@@ -59,6 +68,10 @@ export default function SubscriberMessageForm() {
       const formData = new FormData();
       formData.append("subject", trimmedSubject);
       formData.append("message", trimmedMessage);
+
+      if (trimmedTag) {
+        formData.append("tag", trimmedTag);
+      }
 
       if (attachment) {
         formData.append("attachment", attachment);
@@ -83,6 +96,7 @@ export default function SubscriberMessageForm() {
       toast.success(data?.message || "Message sent successfully.");
       setSubject("");
       setMessage("");
+      setTag("");
       setAttachment(null);
 
       if (fileInputRef.current) {
@@ -172,6 +186,30 @@ export default function SubscriberMessageForm() {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="subscriber-customer-type" className="text-[#2D3D4D]">
+                Customer Type
+              </Label>
+
+              <select
+                id="subscriber-customer-type"
+                value={tag}
+                onChange={(e) => setTag(e.target.value)}
+                className="h-11 w-full rounded-[8px] border border-[#D9E0E7] bg-white px-3 text-[14px] text-[#2D3D4D] focus:border-[#D9E0E7] focus:outline-none focus:ring-2 focus:ring-[#FBFF26]"
+              >
+                <option value="">All Customer</option>
+                {CUSTOMER_TYPE_OPTIONS.map((customerType) => (
+                  <option key={customerType} value={customerType}>
+                    {customerType}
+                  </option>
+                ))}
+              </select>
+
+              <p className="text-[12px] text-[#64748B]">
+                Optional. Keep &quot;All Customer&quot; to send everyone.
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="subscriber-attachment" className="text-[#2D3D4D]">
                 Attachment (optional)
               </Label>
@@ -216,6 +254,7 @@ export default function SubscriberMessageForm() {
                 onClick={() => {
                   setSubject("");
                   setMessage("");
+                  setTag("");
                   setAttachment(null);
                   if (fileInputRef.current) {
                     fileInputRef.current.value = "";
