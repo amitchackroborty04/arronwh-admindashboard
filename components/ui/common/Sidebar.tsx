@@ -84,6 +84,24 @@ const websiteManagementItems = [
     href: "/raise-an-issue",
     icon: FileQuestionMark ,
   },
+
+
+  {
+    name: "Sales",
+    href: "/sales",
+    icon: FileQuestionMark ,
+  },
+    {
+    name: "Aftercare",
+    href: "/aftercare",
+    icon: FileQuestionMark ,
+  },
+    {
+    name: "Engineer",
+    href: "/engineer",
+    icon: FileQuestionMark ,
+  },
+
 ];
 
 
